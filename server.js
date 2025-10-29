@@ -403,7 +403,7 @@ app.get("/device/:studentId", async (req, res) => {
 
   try {
     const query = `
-      SELECT device_id 
+      SELECT student_device_id 
       FROM students 
       WHERE student_id = $1;
     `;
@@ -414,7 +414,7 @@ app.get("/device/:studentId", async (req, res) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    const deviceId = result.rows[0].device_id;
+    const deviceId = result.rows[0].student_device_id;
 
     return res.json({
       message: "Device ID fetched successfully ✅",
