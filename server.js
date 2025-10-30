@@ -161,29 +161,52 @@ app.get("/attendance/:dept", async (req, res) => {
 
 /**
  * ✅ POST /attendance
- * Body -> { studentId, studentDept, status }
+ * Body -> { studentId, studentDept, studentName, status }
  */
 app.post("/attendance", async (req, res) => {
-  const { studentId, studentName, studentDept, status } = req.body;
+  const { studentId, studentDept, studentName, status } = req.body;
 
-  if (!studentId || !studentName || !studentDept || !status) {
-    return res.status(400).json({ message: "Missing required fields" });
+  console.log("📌 Attendance Request:", req.body);
+
+  if (!studentId || !studentDept || !studentName || !status) {
+    return res.status(400).json({ message: "Missing required fields ❌" });
   }
 
   try {
-    await pool.query(
-      `INSERT INTO attendance (student_id, student_dept, student_name, status)
-       VALUES ($1, $2, $3, $4)`,
-      [studentId, studentDept, studentName, status]
-    );
+    const attendanceDate = new Date().toISOString().split("T")[0]; // yyyy-mm-dd ✅
 
-    res.status(201).json({ message: "Attendance recorded successfully" });
+    const insertQuery = `
+      INSERT INTO attendance (
+        student_id,
+        student_dept,
+        student_name,
+        status,
+        attendance_date
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING *;
+    `;
+
+    const result = await pool.query(insertQuery, [
+      studentId,
+      studentDept,
+      studentName,
+      status,
+      attendanceDate
+    ]);
+
+    console.log("✅ Inserted:", result.rows[0]);
+
+    res.status(201).json({
+      message: "Attendance recorded successfully ✅",
+      data: result.rows[0]
+    });
 
   } catch (error) {
-    console.error("Error inserting attendance:", error);
-    res.status(500).json({ message: "DB Error" });
+    console.error("DB Error ❌:", error);
+    res.status(500).json({ message: "Database error ❌", error });
   }
 });
+
 
 // ✅ GET /attendance/:id (Today's status for a specific student)
 app.get("/student-attendance/:id", async (req, res) => {
@@ -295,9 +318,9 @@ app.post("/update-device", async (req, res) => {
   try {
     const updateQuery = `
       UPDATE students
-      SET device_id = $1
+      SET student_device_id = $1
       WHERE student_id = $2
-      RETURNING student_id, student_name, device_id;
+      RETURNING student_id, student_name, student_device_id;
     `;
 
     const result = await pool.query(updateQuery, [device_id, student_id]);
@@ -331,12 +354,11 @@ app.post("/mark-attendance", async (req, res) => {
   }
 
   try {
-    // 1️⃣ Try updating today's attendance
     const updateQuery = `
       UPDATE attendance
       SET status = $1
       WHERE student_id = $2
-      AND DATE(attendance_date) = CURRENT_DATE
+      AND attendance_date = CURRENT_DATE
       RETURNING *;
     `;
 
@@ -364,11 +386,12 @@ app.post("/mark-attendance", async (req, res) => {
     }
 
     const { student_name, student_email, student_dept } = studentResult.rows[0];
+    const attendanceDate = new Date().toISOString().split('T')[0]; // yyyy-mm-dd
 
     // 3️⃣ Insert new attendance entry
     const insertQuery = `
-      INSERT INTO attendance (student_id, student_name, student_dept, status)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO attendance (student_id, student_name, student_dept, status, attendance_date)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *;
     `;
 
@@ -376,7 +399,8 @@ app.post("/mark-attendance", async (req, res) => {
       student_id,
       student_name,
       student_dept,
-      status
+      status,
+      attendanceDate
     ]);
 
     res.status(201).json({
